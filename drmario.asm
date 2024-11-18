@@ -51,15 +51,14 @@ BLACK:
     # Run the game.
 main:
     # Initialize the game
-    # Setup capsule locations
-    li $s0, 0       # capsule X
-    li $s1, 0       # capsule Y
-    li $s2, 0       # capsule orientation
-    li $s3, 0       # capusle A colour
-    li $s4, 0       # capsule B colour
-
     # Draw the border
     jal draw_border
+
+    # Draw the pill
+    jal generate_new_pill
+    
+    # temporary, remove when this is added to game loop
+    jal draw_pill
 
     li $v0, 10                  # exit the program gracefully
     syscall                     # (so it doesn't continue into the draw_rect function again)
@@ -94,6 +93,85 @@ game_loop:
 ##############################################################################
 # Functions
 ##############################################################################
+######################################
+# draw_pill
+######################################
+draw_pill:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+    lw $t0, ADDR_DSPL       # $t0 = base address for display
+    
+    sll $t1, $s0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
+    add $t0, $t0, $t1           # Shift accessed address to x co-ord of pill
+
+    sll $t1, $s1, 7             # Calculate the Y offset to add to $t0 (multiply $s1 by 128)
+    add $t0, $t0, $t1           # Shift accessed address to Y co-ord of pill
+
+    sw $s3, 0($t0)              # Draw pill A at the current location in the bitmap
+
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+
+######################################
+# draw_new_pill
+######################################
+generate_pill_colour:
+    #generate random value from 0, 2
+    li $v0 , 42
+    li $a0 , 0
+    li $a1 , 3
+    syscall
+
+    # Set the value of $a0, to a colour based on the value of $a0
+    beq $a0, 0, set_col_red
+    beq $a0, 1, set_col_yellow
+    beq $a0, 2, set_col_blue
+
+    set_col_red:
+        lw $a0, RED
+        j continue
+
+    set_col_yellow:
+        lw $a0, YELLOW
+        j continue
+
+    set_col_blue:
+        lw $a0, BLUE
+
+    continue:
+        jr $ra
+
+
+######################################
+# generate_new_pill
+######################################
+generate_new_pill:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+    
+    li $s0, 9       # capsule X
+    li $s1, 14       # capsule Y
+    li $s2, 0       # capsule orientation
+
+    # returns a0 filled with one of 1 colours, overwrites a0
+    jal generate_pill_colour
+    move $s3, $a0       # sets the colour of capsule A to randomly generated colour
+
+    # returns a0 filled with one of 1 colours, overwrites a0
+    jal generate_pill_colour
+    move $s4, $a0       # sets the colour of capsula B to a randomly generated colour
+
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+
 ######################################
 # draw_border
 ######################################
@@ -283,7 +361,7 @@ draw_line:
 
 
 ######################################
-# draw_line
+# draw_rect
 
 # $a0 = X co-ordinate to draw
 # $a1 = Y co-ordinate to draw
