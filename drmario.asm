@@ -24,6 +24,8 @@ ADDR_DSPL:
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
+GAME_BOARD:
+    .word 0x10009000
 
 # Colours
 RED:
@@ -60,30 +62,31 @@ main:
     # temporary, remove when this is added to game loop
     jal draw_pill
 
-    li $v0, 10                  # exit the program gracefully
-    syscall                     # (so it doesn't continue into the draw_rect function again)
+    # li $v0, 10                  # exit the program gracefully
+    # syscall                     # (so it doesn't continue into the draw_rect function again)
 
     
 
 game_loop:
-    # Check if a key has been pressed
-    lw $t0, ADDR_KBRD      # Load the address of the keyboard into $t0
-    lb $t1, 4($t0)         # Load the key pressed into $t1
-    li $t2, 'a'            # Load the ASCII value of 'a' into $t2
-    bne $t1, $t2, skip_print # If the key pressed is not 'a', skip printing
+    # # Check if a key has been pressed
+    # lw $t0, ADDR_KBRD      # Load the address of the keyboard into $t0
+    # lb $t1, 4($t0)         # Load the key pressed into $t1
+    # li $t2, 'a'            # Load the ASCII value of 'a' into $t2
+    # bne $t1, $t2, skip_print # If the key pressed is not 'a', skip printing
 
-    # Print a message to the console
-    li $t3, 0xff0000 # $t1 = red
-    lw $t4, ADDR_DSPL # $t0 = base address for display
-    sw $t3, 0( $t4 ) # paint the first unit (i.e., top−left) red
+    # # Print a message to the console
+    # li $t3, 0xff0000 # $t1 = red
+    # lw $t4, ADDR_DSPL # $t0 = base address for display
+    # sw $t3, 0( $t4 ) # paint the first unit (i.e., top−left) red
 
-    skip_print:
-
+    # skip_print:    
+    
     # 1a. Check if key has been pressed
     # 1b. Check which key has been pressed
     # 2a. Check for collisions
 	# 2b. Update locations (capsules)
 	# 3. Draw the screen
+	jal draw_the_screen
 	# 4. Sleep
 
     # 5. Go back to Step 1
@@ -94,13 +97,35 @@ game_loop:
 # Functions
 ##############################################################################
 ######################################
+# draw_the_screen
+######################################
+draw_the_screen:
+    lw $t0 GAME_BOARD
+    lw $t1 ADDR_DSPL
+    li $t2, 4096         # $t2 = length (4096 bytes)
+
+    copy_board_loop:
+        lw $t3, 0($t0)          # Load byte from GAME_BOARD into $t3
+        sw $t3, 0($t1)          # Store byte into ADDR_DISP
+    
+        # Increment pointers and decrement counter
+        addi $t0, $t0, 4        # Move to next byte in GAME_BOARD
+        addi $t1, $t1, 4        # Move to next byte in ADDR_DISP
+        addi $t2, $t2, -1       # Decrease counter
+        
+        bne $t2 $zero copy_board_loop   
+        
+    jr $ra                  # end the copying
+
+
+######################################
 # draw_pill
 ######################################
 draw_pill:
     # start function
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
-    lw $t0, ADDR_DSPL       # $t0 = base address for display
+    lw $t0, GAME_BOARD           # $t0 = base address for display
     
     sll $t1, $s0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
     add $t0, $t0, $t1           # Shift accessed address to x co-ord of pill
@@ -109,6 +134,19 @@ draw_pill:
     add $t0, $t0, $t1           # Shift accessed address to Y co-ord of pill
 
     sw $s3, 0($t0)              # Draw pill A at the current location in the bitmap
+    
+    beq $s2, $zero, add_4_to_t0       # If $s2 == 0, jump to add_4
+    # else $s2 == 1, so add 128
+    addi $t0, $t0, 128              # Add 128 to $t0
+    j post_adding_pill_offset       # jump to end
+        
+    add_4_to_t0:
+        addi $t0, $t0, 4             # Add 4 to $t0
+        j post_adding_pill_offset    # Jump to end
+
+    post_adding_pill_offset:
+    sw $s4, 0($t0)              # Draw pill B at the current location in the bitmap
+    
 
     # end function
     lw $ra, 0($sp)              # restore $ra from the stack
@@ -337,7 +375,7 @@ unstore_registers:
 ######################################
 draw_line:
     lw $a3, WHITE
-    lw $t0, ADDR_DSPL           # $t0 = base address for display
+    lw $t0, GAME_BOARD           # $t0 = base address for display
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
     sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
     add $t1, $t0, $a1           # Add the Y offset to $t0, store the result in $t1
