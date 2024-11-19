@@ -33,7 +33,7 @@ RED:
 YELLOW:
     .word 0xffff00
 BLUE:
-    .word 0x0000ff
+    .word 0x3944BC
 WHITE:
     .word 0xffffff
 BLACK:
@@ -53,14 +53,13 @@ BLACK:
     # Run the game.
 main:
     # Initialize the game
-    # Draw the border
-    jal draw_border
+
 
     # Draw the pill
     jal generate_new_pill
     
-    # temporary, remove when this is added to game loop
-    jal draw_pill
+
+
 
     # li $v0, 10                  # exit the program gracefully
     # syscall                     # (so it doesn't continue into the draw_rect function again)
@@ -68,12 +67,6 @@ main:
     
 
 game_loop:
-    # # Check if a key has been pressed
-    # lw $t0, ADDR_KBRD      # Load the address of the keyboard into $t0
-    # lb $t1, 4($t0)         # Load the key pressed into $t1
-    # li $t2, 'a'            # Load the ASCII value of 'a' into $t2
-    # bne $t1, $t2, skip_print # If the key pressed is not 'a', skip printing
-
     # # Print a message to the console
     # li $t3, 0xff0000 # $t1 = red
     # lw $t4, ADDR_DSPL # $t0 = base address for display
@@ -82,13 +75,33 @@ game_loop:
     # skip_print:    
     
     # 1a. Check if key has been pressed
-    # 1b. Check which key has been pressed
-    # 2a. Check for collisions
-	# 2b. Update locations (capsules)
-	# 3. Draw the screen
-	jal draw_the_screen
-	# 4. Sleep
+    lw $t0 ADDR_KBRD                # Load the root keyboard address
+    lw $t1 0($t0)                   # Load the first word at the root keyboard address
+    beq $t1 1 keyboard_input        # If first word == 1: key is pressed
+    done_keyboard_input:            # return here after keyboard input
 
+    # 2a. Check for collisions
+    # Reset the current game board
+ 
+
+	# 2b. Update locations (capsules)
+
+       
+
+
+
+	# 3. Draw the screen
+    jal clear_the_game_board
+    jal draw_pill
+    jal draw_border
+
+	jal draw_the_screen
+
+	# 4. Sleep
+    li $v0 32       # Code to sleep
+    li $a0 9       # 1000ms / 120 = 9ms
+    syscall         # Sleep for 1/60 seconds
+    
     # 5. Go back to Step 1
     j game_loop
 
@@ -97,17 +110,208 @@ game_loop:
 # Functions
 ##############################################################################
 ######################################
+# is_clear
+# $a0 = X co-ord to check
+# $a1 = Y co-ord to check
+######################################
+is_clear:
+    lw $t0, GAME_BOARD
+
+    sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
+    add $t0, $t0, $a0           # Shift accessed address to x co-ord to check
+
+    sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $s1 by 128)
+    add $t0, $t0, $a1           # Shift accessed address to Y co-ord to check
+
+    lw $t1, 0($t0)              # Load byte to check GAME_BOARD into $t1
+    lw $t2, BLACK               # Load BLACK to compare against
+
+    beq $t1, $t2, is_clear_TRUE            # If $t1 == $t2, the position is clear
+
+    # otherwise is_clear_False
+    li $v0, 0                   # Otherwise, set $v0 to 0 (not clear)
+    jr $ra                      # Return from function
+    
+    is_clear_TRUE:  
+    li $v0, 1                   # Set $v0 to 1 (clear)
+    jr $ra                      # Return from function
+
+
+
+
+
+
+######################################
+# keyboard_input
+######################################
+keyboard_input:
+    lw $a0 4($t0)               # Load the second word from keyboard
+    
+    beq $a0 0x71 quit_game      # If second word == Q: quit game
+    
+    beq $a0 0x61 move_left      # If second word == A: move left
+    
+    beq $a0 0x64 move_right     # If second word == D: move right
+    
+    beq $a0 0x73 move_down      # If second word == S: move down
+    
+    beq $a0 0x77 rotate         # If second word == W: rotate
+    
+    j done_keyboard_input              # otherwise input is bad
+
+
+######################################
+# quit_game
+######################################
+quit_game:
+    li $v0 10
+    syscall
+
+
+######################################
+# move_left
+######################################
+move_left:
+    # Check if space left of pill A is clear
+    addi $a0, $s0, -1       # Set input to be the current X pos -1
+    move $a1, $s1           # Compare same Y co-ord
+    jal is_clear
+    beq $v0, $zero, done_keyboard_input     # don't move left since not clear
+
+    beq $s2, $zero, left_good_to_move       # branch if not vertical so vertical check can be skipped
+        # Check if space left of pill B is clear
+        addi $a0, $s0, -1           # Set input to be the current X pos -1
+        addi $a1, $s1, -1           # Compare same Y co-ord
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't move left since not clear
+
+    left_good_to_move:
+        addi $s0 $s0 -1         # Decrease the current X pos by 1
+        j done_keyboard_input
+
+
+######################################
+# move_right
+######################################
+move_right:
+    bne $s2, $zero, right_vertical_check
+        # else right horizontal check
+        # Check if space right of pill B is clear
+        addi $a0, $s0, 2        # Set input to be the current X pos +2
+        move $a1, $s1           # Compare same Y co-ord
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't move right since not clear
+
+        j right_good_to_move
+
+    right_vertical_check:
+        # Check if space right of pill A is clear
+        addi $a0, $s0, 1            # Set input to be the current X pos -1
+        move $a1, $s1               # Compare same Y co-ord
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't move right since not clear
+
+        # Check if space right of pill B is clear
+        addi $a0, $s0, 1            # Set input to be the current X pos -1
+        addi $a1, $s1, -1           # Compare same Y co-ord
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't move right since not clear
+
+    right_good_to_move:
+        addi $s0 $s0 1         # Increase the current X pos by 1
+        j done_keyboard_input
+
+
+######################################
+# move_down
+######################################
+move_down:
+    # Check if space below pill A is clear
+    move $a0, $s0               # Set input to be the current X pos
+    addi $a1, $s1, 1            # Compare Y co-ord +1
+    jal is_clear
+    beq $v0, $zero, done_keyboard_input     # don't move down since not clear
+
+    bne $s2, $zero, down_good_to_move       # branch if vertical so horizontal check can be skipped
+        # Check if space below pill B is clear
+        addi $a0, $s0, 1           # Set input to be the current X pos -1
+        addi $a1, $s1, 1           # Compare same Y co-ord
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't move down since not clear
+
+    down_good_to_move:
+        addi $s1 $s1 1         # Increase the current Y pos by 1
+        j done_keyboard_input
+
+
+######################################
+# move_down
+######################################
+rotate:
+    beq $s2, $zero, set_orientation_to_vertical        # check if rotation is horizontal (0)
+        # otherwise rotation is vertical
+        # Check if space right of pill A is clear
+        addi $a0, $s0, 1                # Set input to be the X pos +1
+        move $a1, $s1                   # Compare same Y co-ord
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't rotate since not clear
+        
+        li $s2, 0           # set rotation to horizontal
+        move $t0, $s3       # store s3 temporarily
+        move $s3, $s4       # swap s4 and s3
+        move $s4, $t0       # swap s4 and s3, with stored s3
+        
+        j done_keyboard_input
+
+    set_orientation_to_vertical:
+        # Check if space above pill A is clear
+        move $a0, $s0               # Set input to be the current X pos
+        addi $a1, $s1, -1           # Compare Y co-ord -1
+        jal is_clear
+        beq $v0, $zero, done_keyboard_input     # don't rotate since not clear
+
+        li $s2, 1       # set rotation to vertical
+        j done_keyboard_input
+
+
+######################################
+# clear_the_game_board
+######################################
+clear_the_game_board:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+
+    # Draw big black rect
+    li $a0, 0       # $a0 = X co-ordinate to draw
+    li $a1, 0       # $a1 = Y co-ordinate to draw
+    li $a2, 32      # $a2 = width of rectangle
+    li $a3, 32      # $a3 = length of rectangle
+    # store black as the input colour
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, BLACK           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
+
+    jal draw_rect
+
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+
+######################################
 # draw_the_screen
 ######################################
 draw_the_screen:
     lw $t0 GAME_BOARD
     lw $t1 ADDR_DSPL
-    li $t2, 4096         # $t2 = length (4096 bytes)
+    li $t2, 1024         # $t2 = length (4096 bytes)
 
     copy_board_loop:
         lw $t3, 0($t0)          # Load byte from GAME_BOARD into $t3
         sw $t3, 0($t1)          # Store byte into ADDR_DISP
-    
+
         # Increment pointers and decrement counter
         addi $t0, $t0, 4        # Move to next byte in GAME_BOARD
         addi $t1, $t1, 4        # Move to next byte in ADDR_DISP
@@ -136,8 +340,9 @@ draw_pill:
     sw $s3, 0($t0)              # Draw pill A at the current location in the bitmap
     
     beq $s2, $zero, add_4_to_t0       # If $s2 == 0, jump to add_4
-    # else $s2 == 1, so add 128
-    addi $t0, $t0, 128              # Add 128 to $t0
+    
+    # else $s2 == 1, so subtract 128
+    addi $t0, $t0, -128              # Add 128 to $t0
     j post_adding_pill_offset       # jump to end
         
     add_4_to_t0:
@@ -193,7 +398,7 @@ generate_new_pill:
     sw $ra, 0($sp)              # store $ra on the stack
     
     li $s0, 9       # capsule X
-    li $s1, 14       # capsule Y
+    li $s1, 0      # capsule Y
     li $s2, 0       # capsule orientation
 
     # returns a0 filled with one of 1 colours, overwrites a0
@@ -223,6 +428,9 @@ draw_border:
     li $a1, 13      # set Y to 13
     li $a2, 1       # set border width to 1
     li $a3, 18      # set border height to 18
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw right wall
@@ -230,6 +438,9 @@ draw_border:
     li $a1, 13      # set Y to 13
     li $a2, 1       # set border width to 1
     li $a3, 18      # set border height to 18
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw bottom wall
@@ -237,6 +448,9 @@ draw_border:
     li $a1, 30      # set Y to 30
     li $a2, 10       # set border width to 10
     li $a3, 1     # set border height to 1
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw top left
@@ -244,6 +458,9 @@ draw_border:
     li $a1, 13      # set Y to 13
     li $a2, 4      # set border width to 4
     li $a3, 1      # set border height to 1
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw top right
@@ -251,6 +468,9 @@ draw_border:
     li $a1, 13      # set Y to 13
     li $a2, 4      # set border width to 4
     li $a3, 1      # set border height to 1
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw left neck of funnel
@@ -258,6 +478,9 @@ draw_border:
     li $a1, 11      # set Y to 11
     li $a2, 1      # set border width to 1
     li $a3, 2     # set border height to 2
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw right neck of funnel
@@ -265,6 +488,9 @@ draw_border:
     li $a1, 11      # set Y to 11
     li $a2, 1      # set border width to 1
     li $a3, 2     # set border height to 2
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw left top neck of funnel
@@ -272,6 +498,9 @@ draw_border:
     li $a1, 9      # set Y to 9
     li $a2, 1      # set border width to 1
     li $a3, 2     # set border height to 2
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # draw right top neck of funnel
@@ -279,6 +508,9 @@ draw_border:
     li $a1, 9      # set Y to 9
     li $a2, 1      # set border width to 1
     li $a3, 2     # set border height to 2
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
     jal draw_rect
 
     # end
@@ -374,7 +606,6 @@ unstore_registers:
 # $a3 = colour of line
 ######################################
 draw_line:
-    lw $a3, WHITE
     lw $t0, GAME_BOARD           # $t0 = base address for display
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
     sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
@@ -405,8 +636,12 @@ draw_line:
 # $a1 = Y co-ordinate to draw
 # $a2 = width of rectangle
 # $a3 = length of rectangle
+# 0($sp) = colour of rectangle
 ######################################
 draw_rect:
+    lw $t9, 0($sp)              # load colour from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+
     add $t0, $zero, $zero       # create a loop variable with an iniital value of 0
     row_start:
         # store registers
@@ -414,6 +649,7 @@ draw_rect:
         sw $ra, 0($sp)              # store $ra on the stack
         jal store_registers
         
+        move $a3, $t9
         jal draw_line
 
         # unstore registers
