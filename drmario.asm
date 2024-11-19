@@ -21,11 +21,14 @@
 # The address of the bitmap display. Don't forget to connect it!
 ADDR_DSPL:
     .word 0x10008000
+GAME_BOARD:
+    .word 0x10009000
+ADDR_STORAGE_BOARD:
+    .word 0x1000a000
+    
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
-GAME_BOARD:
-    .word 0x10009000
 
 # Colours
 RED:
@@ -57,6 +60,10 @@ main:
 
     # Draw the pill
     jal generate_new_pill
+    
+    # Generate 4 new viruses
+    addi $a0, $zero, 4
+    jal generate_viruses
     
 
 
@@ -110,6 +117,89 @@ game_loop:
 # Functions
 ##############################################################################
 ######################################
+# generate_viruses
+# $a0 = num_viruses
+######################################
+generate_viruses:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+    
+    lw $t0, ADDR_STORAGE_BOARD          # load virus address
+    move $t1, $a0                       # start the counter with number of viruses to draw
+    
+    generate_one_virus:    
+        jal generate_virus_location
+
+        # store the virus cords from v0, v1
+        
+        jal generate_virus_colour       # returns a0 filled with one of 3 colours
+        
+        # store the virus colour from a0
+        
+        addi $t1, $t1, -1               # decrease the viruses to draw counter by 1
+        beq $t1, $zero, done_generating_viruses
+        # Else more than 0 viruses left to draw so loop
+        j generate_one_virus
+    
+    done_generating_viruses:     
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+ 
+        
+######################################
+# generate_virus_location
+######################################
+generate_virus_location:
+    #generate X coord for virus, value from 0, 8
+    li $v0 , 42
+    li $a0 , 0
+    li $a1 , 8 
+    syscall
+    addi $t9, $a0, 6    # save X co-ord value, offset by where the pillbox is, temporarily into t9
+    
+    #generate Y coord for virus, value from 0, 16
+    li $v0 , 42
+    li $a0 , 0
+    li $a1 , 16 
+    syscall
+    addi $v1, $a0, 14   # save Y co-ord value, offset by where the pillbox is
+    
+    move $v0, $t9       # restore X co-oord output
+    jr $ra  # return
+    
+
+######################################
+# generate_virus_colour
+######################################
+generate_virus_colour:
+    #generate random value from 0, 2
+    li $v0 , 42
+    li $a0 , 0
+    li $a1 , 3
+    syscall
+
+    # Set the value of $a0, to a colour based on the value of $a0
+    beq $a0, 0, set_col_redish
+    beq $a0, 1, set_col_yellowish
+    beq $a0, 2, set_col_blueish
+
+    set_col_redish:
+        lw $a0, RED
+        jr $ra
+
+    set_col_yellowish:
+        lw $a0, YELLOW
+        jr $ra
+
+    set_col_blueish:
+        lw $a0, BLUE
+        jr $ra
+        
+        
+######################################
 # is_clear
 # $a0 = X co-ord to check
 # $a1 = Y co-ord to check
@@ -137,25 +227,25 @@ is_clear:
     jr $ra                      # Return from function
 
 
-
-
-
-
 ######################################
 # keyboard_input
 ######################################
 keyboard_input:
-    lw $a0 4($t0)               # Load the second word from keyboard
+    lw $a0 4($t0)               # Load the second word from keyboardx`
     
     beq $a0 0x71 quit_game      # If second word == Q: quit game
     
-    beq $a0 0x61 move_left      # If second word == A: move left
+    # beq $a0 0x61 move_left      # If second word == A: move left
+    beq $a0 0x6a move_left      # If second word == J: move left
     
-    beq $a0 0x64 move_right     # If second word == D: move right
+    # beq $a0 0x64 move_right     # If second word == D: move right
+    beq $a0 0x6c move_right     # If second word == L: move right
+
+    # beq $a0 0x73 move_down      # If second word == S: move down
+    beq $a0 0x6b move_down     # If second word == K: move down
     
-    beq $a0 0x73 move_down      # If second word == S: move down
-    
-    beq $a0 0x77 rotate         # If second word == W: rotate
+    # beq $a0 0x77 rotate         # If second word == W: rotate
+    beq $a0 0x7a rotate         # If second word == Z: rotate
     
     j done_keyboard_input              # otherwise input is bad
 
@@ -360,7 +450,7 @@ draw_pill:
 
 
 ######################################
-# draw_new_pill
+# generate_pill_colour
 ######################################
 generate_pill_colour:
     #generate random value from 0, 2
@@ -376,17 +466,15 @@ generate_pill_colour:
 
     set_col_red:
         lw $a0, RED
-        j continue
+        jr $ra
 
     set_col_yellow:
         lw $a0, YELLOW
-        j continue
+        jr $ra
 
     set_col_blue:
         lw $a0, BLUE
-
-    continue:
-        jr $ra
+        jr $ra        
 
 
 ######################################
@@ -597,6 +685,26 @@ unstore_registers:
     jr $ra
 
 
+######################################
+# draw_pixel
+
+# $a0 = X co-ordinate to draw
+# $a1 = Y co-ordinate to draw
+# $a2 = colour of pixel
+######################################
+draw_pixel:
+    lw $t0, GAME_BOARD           # $t0 = base address for display
+    sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
+    sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
+    add $t1, $t0, $a1           # Add the Y offset to $t0, store the result in $t1
+    add $t1, $t1, $a0           # Add the X offset to $t2 ($t2 now has the starting location of the line in bitmap memory)
+    
+    sw $a2, 0($t1)              # Draw a coloured pixel at the current location in the bitmap
+    
+    # Return to calling program
+    jr $ra
+    
+    
 ######################################
 # draw_line
 
