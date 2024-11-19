@@ -125,17 +125,22 @@ generate_viruses:
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
     
-    lw $t0, ADDR_STORAGE_BOARD          # load virus address
     move $t1, $a0                       # start the counter with number of viruses to draw
     
     generate_one_virus:    
         jal generate_virus_location
-
-        # store the virus cords from v0, v1
+        move $t2, $v0           # store the X co-ord
+        move $t3, $v1           # store the Y co-ord
         
         jal generate_virus_colour       # returns a0 filled with one of 3 colours
         
-        # store the virus colour from a0
+        # draw the virus on storage board
+        move $a2, $a0           # pass the colour as input
+        move $a0, $t2           # pass the X co-ord input
+        move $a1, $t3           # pass the Y co-ord input
+        
+        
+        
         
         addi $t1, $t1, -1               # decrease the viruses to draw counter by 1
         beq $t1, $zero, done_generating_viruses
@@ -686,6 +691,27 @@ unstore_registers:
 
 
 ######################################
+# store_pixel
+
+# $a0 = X co-ordinate to draw
+# $a1 = Y co-ordinate to draw
+# $a2 = colour of pixel
+######################################
+store_pixel:
+    lw $a3, ADDR_STORAGE_BOARD  # load drawing onto game board
+
+    sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
+    sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
+    add $a3, $a3, $a1           # Add the Y offset to $t0, store the result in $t1
+    add $a3, $a3, $a0           # Add the X offset to $t2 ($t2 now has the starting location of the line in bitmap memory)
+    
+    sw $a2, 0($a3)              # Draw a coloured pixel at the current location in the bitmap
+    
+    # Return to calling program
+    jr $ra
+
+
+######################################
 # draw_pixel
 
 # $a0 = X co-ordinate to draw
@@ -693,13 +719,14 @@ unstore_registers:
 # $a2 = colour of pixel
 ######################################
 draw_pixel:
-    lw $t0, GAME_BOARD           # $t0 = base address for display
+    lw $a3, GAME_BOARD          # load drawing onto game board
+
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
     sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
-    add $t1, $t0, $a1           # Add the Y offset to $t0, store the result in $t1
-    add $t1, $t1, $a0           # Add the X offset to $t2 ($t2 now has the starting location of the line in bitmap memory)
+    add $a3, $a3, $a1           # Add the Y offset to $t0, store the result in $t1
+    add $a3, $a3, $a0           # Add the X offset to $t2 ($t2 now has the starting location of the line in bitmap memory)
     
-    sw $a2, 0($t1)              # Draw a coloured pixel at the current location in the bitmap
+    sw $a2, 0($a3)              # Draw a coloured pixel at the current location in the bitmap
     
     # Return to calling program
     jr $ra
