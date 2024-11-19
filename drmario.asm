@@ -21,7 +21,7 @@
 # The address of the bitmap display. Don't forget to connect it!
 ADDR_DSPL:
     .word 0x10008000
-GAME_BOARD:
+ADDR_PRE_DSPL:
     .word 0x10009000
 ADDR_STORAGE_BOARD:
     .word 0x1000a000
@@ -98,7 +98,7 @@ game_loop:
 
 
 	# 3. Draw the screen
-    jal clear_the_game_board
+    jal clear_the_pre_dspl
     jal draw_pill
     jal draw_border
 
@@ -138,6 +138,7 @@ generate_viruses:
         move $a2, $a0           # pass the colour as input
         move $a0, $t2           # pass the X co-ord input
         move $a1, $t3           # pass the Y co-ord input
+        jal store_pixel
         
         
         
@@ -210,7 +211,7 @@ generate_virus_colour:
 # $a1 = Y co-ord to check
 ######################################
 is_clear:
-    lw $t0, GAME_BOARD
+    lw $t0, ADDR_PRE_DSPL
 
     sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
     add $t0, $t0, $a0           # Shift accessed address to x co-ord to check
@@ -218,7 +219,7 @@ is_clear:
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $s1 by 128)
     add $t0, $t0, $a1           # Shift accessed address to Y co-ord to check
 
-    lw $t1, 0($t0)              # Load byte to check GAME_BOARD into $t1
+    lw $t1, 0($t0)              # Load byte into $t1 to check pre display 
     lw $t2, BLACK               # Load BLACK to compare against
 
     beq $t1, $t2, is_clear_TRUE            # If $t1 == $t2, the position is clear
@@ -370,9 +371,9 @@ rotate:
 
 
 ######################################
-# clear_the_game_board
+# clear_the_pre_dspl
 ######################################
-clear_the_game_board:
+clear_the_pre_dspl:
     # start function
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
@@ -399,16 +400,16 @@ clear_the_game_board:
 # draw_the_screen
 ######################################
 draw_the_screen:
-    lw $t0 GAME_BOARD
+    lw $t0 ADDR_PRE_DSPL
     lw $t1 ADDR_DSPL
     li $t2, 1024         # $t2 = length (4096 bytes)
 
     copy_board_loop:
-        lw $t3, 0($t0)          # Load byte from GAME_BOARD into $t3
+        lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3
         sw $t3, 0($t1)          # Store byte into ADDR_DISP
 
         # Increment pointers and decrement counter
-        addi $t0, $t0, 4        # Move to next byte in GAME_BOARD
+        addi $t0, $t0, 4        # Move to next byte in ADDR_PRE_DSPL
         addi $t1, $t1, 4        # Move to next byte in ADDR_DISP
         addi $t2, $t2, -1       # Decrease counter
         
@@ -424,7 +425,7 @@ draw_pill:
     # start function
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
-    lw $t0, GAME_BOARD           # $t0 = base address for display
+    lw $t0, ADDR_PRE_DSPL           # $t0 = base address for display
     
     sll $t1, $s0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
     add $t0, $t0, $t1           # Shift accessed address to x co-ord of pill
@@ -719,7 +720,7 @@ store_pixel:
 # $a2 = colour of pixel
 ######################################
 draw_pixel:
-    lw $a3, GAME_BOARD          # load drawing onto game board
+    lw $a3, ADDR_PRE_DSPL          # load drawing onto game board
 
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
     sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
@@ -741,7 +742,7 @@ draw_pixel:
 # $a3 = colour of line
 ######################################
 draw_line:
-    lw $t0, GAME_BOARD           # $t0 = base address for display
+    lw $t0, ADDR_PRE_DSPL           # $t0 = base address for display
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
     sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
     add $t1, $t0, $a1           # Add the Y offset to $t0, store the result in $t1
