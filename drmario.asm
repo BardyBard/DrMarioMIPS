@@ -33,10 +33,16 @@ ADDR_KBRD:
 # Colours
 RED:
     .word 0xff0000
+REDISH:
+    .word 0xff747c
 YELLOW:
     .word 0xffff00
+YELLOWISH:
+    .word 0xffee8c
 BLUE:
     .word 0x3944BC
+BLUEISH:
+    .word 0x1e90FF
 WHITE:
     .word 0xffffff
 BLACK:
@@ -58,29 +64,18 @@ main:
     # Initialize the game
 
 
-    # Draw the pill
-    jal generate_new_pill
+
     
     # Generate 4 new viruses
     addi $a0, $zero, 4
     jal generate_viruses
-    
 
-
-
-    # li $v0, 10                  # exit the program gracefully
-    # syscall                     # (so it doesn't continue into the draw_rect function again)
-
+    start_new_pill:
+        # Draw the pill
+        jal generate_new_pill
     
 
 game_loop:
-    # # Print a message to the console
-    # li $t3, 0xff0000 # $t1 = red
-    # lw $t4, ADDR_DSPL # $t0 = base address for display
-    # sw $t3, 0( $t4 ) # paint the first unit (i.e., top−left) red
-
-    # skip_print:    
-    
     # 1a. Check if key has been pressed
     lw $t0 ADDR_KBRD                # Load the root keyboard address
     lw $t1 0($t0)                   # Load the first word at the root keyboard address
@@ -99,10 +94,19 @@ game_loop:
 
 	# 3. Draw the screen
     jal clear_the_pre_dspl
+    jal load_storage
     jal draw_pill
     jal draw_border
 
 	jal draw_the_screen
+
+    # INCREASE ANIMATION COUNTERS
+
+    addi $s7, $s7, -1
+    bge $s7, $zero, skip_reset_virus_animation
+    li $s7, 90
+    skip_reset_virus_animation:
+
 
 	# 4. Sleep
     li $v0 32       # Code to sleep
@@ -138,10 +142,7 @@ generate_viruses:
         move $a2, $a0           # pass the colour as input
         move $a0, $t2           # pass the X co-ord input
         move $a1, $t3           # pass the Y co-ord input
-        jal store_pixel
-        
-        
-        
+        jal store_pixel     
         
         addi $t1, $t1, -1               # decrease the viruses to draw counter by 1
         beq $t1, $zero, done_generating_viruses
@@ -169,9 +170,9 @@ generate_virus_location:
     #generate Y coord for virus, value from 0, 16
     li $v0 , 42
     li $a0 , 0
-    li $a1 , 16 
+    li $a1 , 14 
     syscall
-    addi $v1, $a0, 14   # save Y co-ord value, offset by where the pillbox is
+    addi $v1, $a0, 16   # save Y co-ord value, offset by where the pillbox is plus 2
     
     move $v0, $t9       # restore X co-oord output
     jr $ra  # return
@@ -193,15 +194,15 @@ generate_virus_colour:
     beq $a0, 2, set_col_blueish
 
     set_col_redish:
-        lw $a0, RED
+        lw $a0, REDISH
         jr $ra
 
     set_col_yellowish:
-        lw $a0, YELLOW
+        lw $a0, YELLOWISH
         jr $ra
 
     set_col_blueish:
-        lw $a0, BLUE
+        lw $a0, BLUEISH
         jr $ra
         
         
@@ -326,14 +327,14 @@ move_down:
     move $a0, $s0               # Set input to be the current X pos
     addi $a1, $s1, 1            # Compare Y co-ord +1
     jal is_clear
-    beq $v0, $zero, done_keyboard_input     # don't move down since not clear
+    beq $v0, $zero, pill_dropped     # don't move down since not clear
 
     bne $s2, $zero, down_good_to_move       # branch if vertical so horizontal check can be skipped
         # Check if space below pill B is clear
         addi $a0, $s0, 1           # Set input to be the current X pos -1
         addi $a1, $s1, 1           # Compare same Y co-ord
         jal is_clear
-        beq $v0, $zero, done_keyboard_input     # don't move down since not clear
+        beq $v0, $zero, pill_dropped     # don't move down since not clear
 
     down_good_to_move:
         addi $s1 $s1 1         # Increase the current Y pos by 1
@@ -341,7 +342,7 @@ move_down:
 
 
 ######################################
-# move_down
+# rotate
 ######################################
 rotate:
     beq $s2, $zero, set_orientation_to_vertical        # check if rotation is horizontal (0)
@@ -371,6 +372,38 @@ rotate:
 
 
 ######################################
+# pill_dropped
+######################################
+pill_dropped:
+        # save pill A
+        move $a0, $s0           # pass the X co-ord input
+        move $a1, $s1           # pass the Y co-ord input
+        move $a2, $s3           # pass the colour as input
+        jal store_pixel
+
+        beq $s2, $zero, dropped_horizontally
+        # Otherwise dropped_vertically
+            # save pill B
+            move $a0, $s0               # pass the X co-ord input
+            addi $a1, $s1, -1           # pass the Y co-ord input
+            move $a2, $s4               # pass the colour as input
+            jal store_pixel
+
+            j start_new_pill            # end
+
+        dropped_horizontally:
+            # save pill B
+            addi $a0, $s0, 1            # pass the X co-ord input
+            move $a1, $s1               # pass the Y co-ord input
+            move $a2, $s4               # pass the colour as input
+            jal store_pixel
+
+        j start_new_pill            # end
+
+
+
+
+######################################
 # clear_the_pre_dspl
 ######################################
 clear_the_pre_dspl:
@@ -394,6 +427,43 @@ clear_the_pre_dspl:
     lw $ra, 0($sp)              # restore $ra from the stack
     addi $sp, $sp, 4            # move the stack pointer to the new top element
     jr $ra 
+
+
+######################################
+# load_storage
+######################################
+load_storage:
+    lw $t0 ADDR_STORAGE_BOARD
+    lw $t1 ADDR_PRE_DSPL
+    li $t2, 1024                # $t2 = length (4096 bytes)
+    li $t4, 75                 # value to compare animation counter for viruses
+    lw $t9, REDISH               # Get black to compare
+    lw $t8, YELLOWISH               # Get black to compare
+    lw $t7, BLUEISH               # Get black to compare
+
+    load_storage_loop:
+        lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3
+        
+
+        # Check virus animation cycle to see if they should be loaded
+        blt $s7, $t4, skip_virus_unrendering
+        # Check if virus
+        beq $t3, $t9, skip_stored
+        beq $t3, $t8, skip_stored
+        beq $t3, $t7, skip_stored
+        skip_virus_unrendering:
+        
+        sw $t3, 0($t1)          # Store byte into ADDR_DISP
+
+        skip_stored:
+        # Increment pointers and decrement counter
+        addi $t0, $t0, 4        # Move to next byte in ADDR_PRE_DSPL
+        addi $t1, $t1, 4        # Move to next byte in ADDR_DISP
+        addi $t2, $t2, -1       # Decrease counter
+        
+        bne $t2 $zero load_storage_loop   
+        
+    jr $ra                  # end the copying
 
 
 ######################################
@@ -492,7 +562,7 @@ generate_new_pill:
     sw $ra, 0($sp)              # store $ra on the stack
     
     li $s0, 9       # capsule X
-    li $s1, 0      # capsule Y
+    li $s1, 14      # capsule Y
     li $s2, 0       # capsule orientation
 
     # returns a0 filled with one of 1 colours, overwrites a0
