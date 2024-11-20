@@ -443,6 +443,13 @@ rotate:
 # pill_dropped
 ######################################
 pill_dropped:
+        li $v0 31   # MIDI Code
+        li $a0 35   # Note
+        li $a1 200  # Duration (ms)
+        li $a2 15   # Instrument type
+        li $a3 30   # Volumne
+        syscall
+
         # save pill A
         move $a0, $s0           # pass the X co-ord input
         move $a1, $s1           # pass the Y co-ord input
