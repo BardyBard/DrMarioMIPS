@@ -80,7 +80,36 @@ main:
     start_new_pill:
         # Draw the pill
         jal generate_new_pill
+
     
+    li $s6, 600                 # Load mario animation
+    
+    starting_loop:
+        # 3. Draw the screen
+        jal clear_the_pre_dspl
+        jal load_pre_dspl
+        jal draw_mario
+        jal draw_pill
+    
+    	jal draw_the_screen
+    
+        # Mario animation
+        addi $s6, $s6, -16
+        bge $s6, $zero, skip_reset_mario_animation
+        li $s6, 600             # reset mario animation to 0
+        li $s0, 9              # X co-ord pill
+        li $s1, 14               # Y co-ord pill
+        
+        j game_loop
+        skip_reset_mario_animation:
+
+        # Sleep
+        li $v0 32       # Code to sleep
+        li $a0 9       # 1000ms / 120 = 9ms
+        syscall         # Sleep for 1/60 seconds
+
+        j starting_loop
+
 
 game_loop:
     # 1a. Check if key has been pressed
@@ -108,11 +137,13 @@ game_loop:
 	jal draw_the_screen
 
     # INCREASE ANIMATION COUNTERS
-
+    # Virus animation
     addi $s7, $s7, -1
     bge $s7, $zero, skip_reset_virus_animation
     li $s7, 90
     skip_reset_virus_animation:
+
+
 
 
 	# 4. Sleep
@@ -596,8 +627,8 @@ generate_new_pill:
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
     
-    li $s0, 9       # capsule X
-    li $s1, 14      # capsule Y
+    li $s0, 14       # capsule X
+    li $s1, 10      # capsule Y
     li $s2, 0       # capsule orientation
 
     # returns a0 filled with one of 1 colours, overwrites a0
@@ -879,15 +910,89 @@ draw_mario:
     li $a1, 9       # Y co-ordinate to draw
     lw $a2, GREY    # colour of pixel
     jal draw_pixel
-
+    
     # animate arm
-    li $a0, 16      # X co-ordinate to draw
-    li $a1, 10      # Y co-ordinate to draw
-    lw $a2, SKIN    # colour of pixel
-    jal draw_pixel
+    li $t0, 500
+    blt $s6, $t0, mario_second_frame
+    # Otherwise in first frame 
+        li $a0, 16      # X co-ordinate to draw
+        li $a1, 10      # Y co-ordinate to draw
+        lw $a2, SKIN    # colour of pixel
+        jal draw_pixel
+        j mario_end_animation
+
+    mario_second_frame:
+    li $t0, 400
+    blt $s6, $t0, mario_third_frame
+    # Otherwise in second frame 
+        li $a0, 15      # X co-ordinate to draw
+        li $a1, 9       # Y co-ordinate to draw
+        lw $a2, SKIN    # colour of pixel
+        jal draw_pixel
+
+        li $s0, 13      # X co-ord pill
+        li $s1, 9       # Y co-ord pill
+        j mario_end_animation
+
+    mario_third_frame:
+    li $t0, 300
+    blt $s6, $t0, mario_fourth_frame
+    # Otherwise in third frame 
+        li $a0, 15      # X co-ordinate to draw
+        li $a1, 8       # Y co-ordinate to draw
+        lw $a2, SKIN    # colour of pixel
+        jal draw_pixel
+
+        li $s0, 13      # X co-ord pill
+        li $s1, 7       # Y co-ord pill
+        j mario_end_animation
+
+    mario_fourth_frame:
+    li $t0, 200
+    blt $s6, $t0, mario_fifth_frame
+    # Otherwise in fourth or fifth frame (share the same mario position)
+        li $a0, 14      # X co-ordinate to draw
+        li $a1, 8       # Y co-ordinate to draw
+        lw $a2, SKIN    # colour of pixel
+        jal draw_pixel
+        li $a0, 15      # X co-ordinate to draw
+        li $a1, 8       # Y co-ordinate to draw
+        lw $a2, WHITE    # colour of pixel
+        jal draw_pixel
+
+        li $s0, 11      # X co-ord pill
+        li $s1, 7       # Y co-ord pill
+        j mario_end_animation
+
+    mario_fifth_frame:
+    li $t0, 100
+    blt $s6, $t0, mario_sixth_frame
+    # Otherwise in fifth frame 
+        li $a0, 14      # X co-ordinate to draw
+        li $a1, 8       # Y co-ordinate to draw
+        lw $a2, SKIN    # colour of pixel
+        jal draw_pixel
+        li $a0, 15      # X co-ordinate to draw
+        li $a1, 8       # Y co-ordinate to draw
+        lw $a2, WHITE    # colour of pixel
+        jal draw_pixel
+
+        li $s0, 10      # X co-ord pill
+        li $s1, 9       # Y co-ord pill
+        j mario_end_animation
+
+    mario_sixth_frame:
+        li $a0, 15      # X co-ordinate to draw
+        li $a1, 9       # Y co-ordinate to draw
+        lw $a2, SKIN    # colour of pixel
+        jal draw_pixel
+
+        li $s0, 9      # X co-ord pill
+        li $s1, 11       # Y co-ord pill
 
     
     # end function
+    mario_end_animation:
     lw $ra, 0($sp)              # restore $ra from the stack
     addi $sp, $sp, 4            # move the stack pointer to the new top element
     jr $ra 
