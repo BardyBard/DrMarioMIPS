@@ -476,26 +476,11 @@ load_pre_dspl:
     lw $t0 ADDR_STORAGE_BOARD
     lw $t1 ADDR_PRE_DSPL
     li $t2, 1024                # $t2 = length (4096 bytes)
-    li $t4, 75                 # value to compare animation counter for viruses
-    lw $t9, REDISH               # Get black to compare
-    lw $t8, YELLOWISH               # Get black to compare
-    lw $t7, BLUEISH               # Get black to compare
 
     load_storage_loop:
-        lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3
-        
-
-        # Check virus animation cycle to see if they should be loaded
-        blt $s7, $t4, skip_virus_unrendering
-        # Check if virus
-        beq $t3, $t9, skip_stored
-        beq $t3, $t8, skip_stored
-        beq $t3, $t7, skip_stored
-        skip_virus_unrendering:
-        
+        lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3    
         sw $t3, 0($t1)          # Store byte into ADDR_DISP
 
-        skip_stored:
         # Increment pointers and decrement counter
         addi $t0, $t0, 4        # Move to next byte in ADDR_PRE_DSPL
         addi $t1, $t1, 4        # Move to next byte in ADDR_DISP
@@ -540,9 +525,28 @@ draw_the_screen:
     lw $t1 ADDR_DSPL
     li $t2, 1024         # $t2 = length (4096 bytes)
 
+    # animation setup
+    li $t4, 82                 # value to compare animation counter for viruses
+    lw $t9, REDISH               # Get black to compare
+    lw $t8, YELLOWISH               # Get black to compare
+    lw $t7, BLUEISH               # Get black to compare
+    lw $t6, BROWN
+
     copy_board_loop:
         lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3
         sw $t3, 0($t1)          # Store byte into ADDR_DISP
+        
+        # Check virus animation cycle to see if they should be loaded
+        blt $s7, $t4, skip_virus_unrendering
+        # Check if virus
+        beq $t3, $t9, flicker_virus
+        beq $t3, $t8, flicker_virus
+        beq $t3, $t7, flicker_virus
+        j skip_virus_unrendering
+
+        flicker_virus:
+        sw $t6, 0($t1)          # Store byte into ADDR_DISP
+        skip_virus_unrendering:
 
         # Increment pointers and decrement counter
         addi $t0, $t0, 4        # Move to next byte in ADDR_PRE_DSPL
