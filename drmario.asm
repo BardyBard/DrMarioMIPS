@@ -38,7 +38,7 @@ REDISH:
 YELLOW:
     .word 0xffff00
 YELLOWISH:
-    .word 0xffee8c
+    .word 0xc8f902
 BLUE:
     .word 0x3944BC
 BLUEISH:
@@ -111,7 +111,7 @@ main:
         j starting_loop
 
 
-game_loop:
+game_loop:  
     # 1a. Check if key has been pressed
     lw $t0 ADDR_KBRD                # Load the root keyboard address
     lw $t1 0($t0)                   # Load the first word at the root keyboard address
@@ -123,7 +123,8 @@ game_loop:
  
 
 	# 2b. Update locations (capsules)
-
+    # check for 4 in a row
+    jal combo_check
        
 
 
@@ -159,34 +160,134 @@ game_loop:
 # Functions
 ##############################################################################
 ######################################
-# line_four_check
+# combo_check
 ######################################
-# line_four_check:
-#     # start function
-#     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-#     sw $ra, 0($sp)              # store $ra on the stack
+combo_check:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
 
-#     li $t0, 6       # first X co-ord to check
-#     li $t1, 14      # first Y co-ord to check
-#     li $t9, 13      # last X co-ord to check
-#     li $t9, 29      # last Y co-ord to check
+    li $t0, 0       # current X co-ord to check
+    li $t1, 0       # current Y co-ord to check
+    li $t9, 7       # last X co-ord to check
+    li $t8, 15      # last Y co-ord to check
+    lw $t2, ADDR_STORAGE_BOARD
+    lw $t3, BLACK
 
-#     check_point_loop:
-    
-
-
-
-
-#         j check_point_loop 
-
-#     # end function
-#     lw $ra, 0($sp)              # restore $ra from the stack
-#     addi $sp, $sp, 4            # move the stack pointer to the new top element
-#     jr $ra 
+    combo_point_loop:
+        addi $a0, $t0, 6        # current X co-ord to check
+        sll $a0, $a0, 2         # Calculate the X offset to add to $t0 (multiply $a0 by 4)
+        addi $a1, $t1, 14       # current Y co-ord to check
+        sll $a1, $a1, 7         # Calculate the Y offset to add to $t0 (multiply $a1 by 128)        
         
+        add $a0, $a0, $a1       # Combine X and Y pixel location to check into $a0
+        add $a0, $a0, $t2       # Find the actual memory location
+        lw $a1, 0($a0)
+        beq $a1, $t3, skip_combo_checking
+        
+        li $v0, 1                   # set combo to 1
+        jal store_registers
+        jal combo_check_right
+        jal unstore_registers
+        
+        li $t4, 4
+        bge $v0, $t4, erase_right
+        j skip_combo_checking
+        
+        erase_right:
+            jal store_registers
+            jal combo_erase_right
+            jal unstore_registers
+        
+        skip_combo_checking:
+        beq $t0, $t9, end_of_row_combo      # Scanning has reached the end of the row
+        j not_end_of_combo_row
+        
+        end_of_row_combo:
+            beq $t1, $t8, end_combo_checking
+            addi $t1, $t1, 1        # increment current checked Y co-ord
+            li $t0, 0               # reset X co-ord to start of row   
+            j combo_point_loop
+        
+        not_end_of_combo_row:
+        addi $t0, $t0, 1        # incremend current checked X co-ord
+        j combo_point_loop 
+        
+    # end function
+    end_combo_checking:
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+######################################
+# combo_erase_right
+# $a0 = memory location to check
+# $v0 = number of blocks to erase
+######################################
+combo_erase_right:
+    lw $t0, BLACK
+    beq $v0, $zero done_erasing
     
+    sw $t0, 0($a0)      # erase square
+    addi $a0, $a0, 4    # move to next square
+    addi $v0, $v0, -1   # subtract one from counter
+    
+    j combo_erase_right
+    
+    done_erasing:
+    jr $ra
 
 
+######################################
+# combo_check_right
+# $a0 = memory location to check
+# $a1 = colour to check
+
+# $v0 = return combo number
+######################################
+combo_check_right:   
+    addi $a0, $a0, 4    # go right
+    lw $t0, 0($a0)      # load the colour on the right
+    
+    lw  $t1, YELLOW    
+    lw  $t2, YELLOWISH
+    beq $a1, $t1, combo_right_yellow
+    beq $a1, $t2, combo_right_yellow
+    
+    lw  $t1, RED    
+    lw  $t2, REDISH
+    beq $a1, $t1, combo_right_red
+    beq $a1, $t2, combo_right_red
+    
+    lw  $t1, BLUE    
+    lw  $t2, BLUEISH
+    beq $a1, $t1, combo_right_blue
+    beq $a1, $t2, combo_right_blue
+    j combo_right_ends
+    
+    combo_right_yellow:
+        beq $t0, $t1 combo_right_continues
+        beq $t0, $t2 combo_right_continues
+        j combo_right_ends
+        
+    combo_right_red:
+        beq $t0, $t1 combo_right_continues
+        beq $t0, $t2 combo_right_continues
+        j combo_right_ends
+        
+    combo_right_blue:
+        beq $t0, $t1 combo_right_continues
+        beq $t0, $t2 combo_right_continues
+        j combo_right_ends
+    
+    combo_right_continues:
+        addi $v0, $v0, 1
+        j combo_check_right
+    
+    combo_right_ends:
+    jr $ra 
+   
+        
 ######################################
 # generate_viruses
 # $a0 = num_viruses
@@ -273,7 +374,6 @@ generate_virus_colour:
         jr $ra
         
         
-
 ######################################
 # keyboard_input
 ######################################
@@ -537,7 +637,6 @@ draw_the_screen:
     lw $t9, REDISH               # Get black to compare
     lw $t8, YELLOWISH               # Get black to compare
     lw $t7, BLUEISH               # Get black to compare
-    lw $t6, BROWN
 
     copy_board_loop:
         lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3
@@ -546,13 +645,24 @@ draw_the_screen:
         # Check virus animation cycle to see if they should be loaded
         blt $s7, $t4, skip_virus_unrendering
         # Check if virus
-        beq $t3, $t9, flicker_virus
-        beq $t3, $t8, flicker_virus
-        beq $t3, $t7, flicker_virus
+        beq $t3, $t9, flicker_virus_red
+        beq $t3, $t8, flicker_virus_yellow
+        beq $t3, $t7, flicker_virus_blue
         j skip_virus_unrendering
 
-        flicker_virus:
+        flicker_virus_red:
+        lw $t6, RED
         sw $t6, 0($t1)          # Store byte into ADDR_DISP
+        j skip_virus_unrendering
+        
+        flicker_virus_yellow:
+        lw $t6, YELLOW
+        sw $t6, 0($t1)          # Store byte into 
+        j skip_virus_unrendering
+        
+        flicker_virus_blue:
+        lW $t6, BLUE
+        sw $t6, 0($t1)          # Store byte into 
         skip_virus_unrendering:
 
         # Increment pointers and decrement counter
@@ -772,20 +882,14 @@ store_registers:
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $t2, 0($sp)              
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-    sw $t3, 0($sp)              
+    sw $t3, 0($sp)                            
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $t4, 0($sp)              
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $t5, 0($sp)              
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-    sw $t6, 0($sp)              
-    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-    sw $t7, 0($sp)              
-    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-    sw $t8, 0($sp)              
-    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-    sw $t9, 0($sp)              
-
+    sw $t6, 0($sp)       
+    
     # store $a registers
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $a0, 0($sp)              
@@ -814,12 +918,6 @@ unstore_registers:
     addi $sp, $sp, 4            # move the stack pointer to the new top element
 
     # unstore $t registers
-    lw $t9, 0($sp)              
-    addi $sp, $sp, 4            # move the stack pointer to the new top element
-    lw $t8, 0($sp)              
-    addi $sp, $sp, 4            # move the stack pointer to the new top element
-    lw $t7, 0($sp)              
-    addi $sp, $sp, 4            # move the stack pointer to the new top element
     lw $t6, 0($sp)              
     addi $sp, $sp, 4            # move the stack pointer to the new top element
     lw $t5, 0($sp)              
@@ -1074,27 +1172,28 @@ draw_line:
 draw_rect:
     lw $t9, 0($sp)              # load colour from the stack
     addi $sp, $sp, 4            # move the stack pointer to the new top element
+    
+    # start func
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
 
     add $t0, $zero, $zero       # create a loop variable with an iniital value of 0
     row_start:
-        # store registers
-        addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-        sw $ra, 0($sp)              # store $ra on the stack
         jal store_registers
         
         move $a3, $t9
         jal draw_line
-
         # unstore registers
+        
         jal unstore_registers
-        lw $ra, 0($sp)              # restore $ra from the stack
-        addi $sp, $sp, 4            # move the stack pointer to the new top element
-
+        
         addi $a1, $a1, 1            # move to the next row to draw
         addi $t0, $t0, 1            # increment the row variable by 1
         beq $t0, $a3, row_end       # when the last line has been drawn, break out of the line-drawing loop
         j row_start                 # jump to the start of the line-drawing section
     row_end:
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
     jr $ra                      # return to the calling program
 
 
@@ -1142,12 +1241,13 @@ store_line:
 store_rect:
     lw $t9, 0($sp)              # load colour from the stack
     addi $sp, $sp, 4            # move the stack pointer to the new top element
+    
+    # store ra
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
 
     add $t0, $zero, $zero       # create a loop variable with an iniital value of 0
     row_store_start:
-        # store registers
-        addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-        sw $ra, 0($sp)              # store $ra on the stack
         jal store_registers
         
         move $a3, $t9
@@ -1155,12 +1255,12 @@ store_rect:
 
         # unstore registers
         jal unstore_registers
-        lw $ra, 0($sp)              # restore $ra from the stack
-        addi $sp, $sp, 4            # move the stack pointer to the new top element
 
         addi $a1, $a1, 1            # move to the next row to store
         addi $t0, $t0, 1            # increment the row variable by 1
         beq $t0, $a3, row_store_end       # when the last line has been stored, break out of the line-storing loop
         j row_store_start                 # jump to the start of the line-storing section
     row_store_end:
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
     jr $ra                      # return to the calling program
