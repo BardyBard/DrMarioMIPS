@@ -30,7 +30,7 @@ ADDR_STORAGE_BOARD:
 ADDR_KBRD:
     .word 0xffff0000
 
-# Colours
+# Game colours
 RED:
     .word 0xff0000
 REDISH:
@@ -48,6 +48,15 @@ WHITE:
 BLACK:
     .word 0x000000
 
+
+# Drawing colours
+BROWN:
+    .word 0x964b00
+SKIN:
+    .word 0xe0ac69
+GREY:
+    .word 0xaaaaaa
+
 ##############################################################################
 # Mutable Data
 ##############################################################################
@@ -62,10 +71,8 @@ BLACK:
     # Run the game.
 main:
     # Initialize the game
+    jal store_border
 
-
-
-    
     # Generate 4 new viruses
     addi $a0, $zero, 4
     jal generate_viruses
@@ -94,9 +101,9 @@ game_loop:
 
 	# 3. Draw the screen
     jal clear_the_pre_dspl
-    jal load_storage
+    jal load_pre_dspl
+    jal draw_mario
     jal draw_pill
-    jal draw_border
 
 	jal draw_the_screen
 
@@ -120,6 +127,35 @@ game_loop:
 ##############################################################################
 # Functions
 ##############################################################################
+######################################
+# line_four_check
+######################################
+# line_four_check:
+#     # start function
+#     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+#     sw $ra, 0($sp)              # store $ra on the stack
+
+#     li $t0, 6       # first X co-ord to check
+#     li $t1, 14      # first Y co-ord to check
+#     li $t9, 13      # last X co-ord to check
+#     li $t9, 29      # last Y co-ord to check
+
+#     check_point_loop:
+    
+
+
+
+
+#         j check_point_loop 
+
+#     # end function
+#     lw $ra, 0($sp)              # restore $ra from the stack
+#     addi $sp, $sp, 4            # move the stack pointer to the new top element
+#     jr $ra 
+        
+    
+
+
 ######################################
 # generate_viruses
 # $a0 = num_viruses
@@ -206,33 +242,6 @@ generate_virus_colour:
         jr $ra
         
         
-######################################
-# is_clear
-# $a0 = X co-ord to check
-# $a1 = Y co-ord to check
-######################################
-is_clear:
-    lw $t0, ADDR_PRE_DSPL
-
-    sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
-    add $t0, $t0, $a0           # Shift accessed address to x co-ord to check
-
-    sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $s1 by 128)
-    add $t0, $t0, $a1           # Shift accessed address to Y co-ord to check
-
-    lw $t1, 0($t0)              # Load byte into $t1 to check pre display 
-    lw $t2, BLACK               # Load BLACK to compare against
-
-    beq $t1, $t2, is_clear_TRUE            # If $t1 == $t2, the position is clear
-
-    # otherwise is_clear_False
-    li $v0, 0                   # Otherwise, set $v0 to 0 (not clear)
-    jr $ra                      # Return from function
-    
-    is_clear_TRUE:  
-    li $v0, 1                   # Set $v0 to 1 (clear)
-    jr $ra                      # Return from function
-
 
 ######################################
 # keyboard_input
@@ -263,6 +272,34 @@ keyboard_input:
 quit_game:
     li $v0 10
     syscall
+
+
+######################################
+# is_clear
+# $a0 = X co-ord to check
+# $a1 = Y co-ord to check
+######################################
+is_clear:
+    lw $t0, ADDR_PRE_DSPL
+
+    sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $s0 by 4)
+    add $t0, $t0, $a0           # Shift accessed address to x co-ord to check
+
+    sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $s1 by 128)
+    add $t0, $t0, $a1           # Shift accessed address to Y co-ord to check
+
+    lw $t1, 0($t0)              # Load byte into $t1 to check pre display 
+    lw $t2, BLACK               # Load BLACK to compare against
+
+    beq $t1, $t2, is_clear_TRUE            # If $t1 == $t2, the position is clear
+
+    # otherwise is_clear_False
+    li $v0, 0                   # Otherwise, set $v0 to 0 (not clear)
+    jr $ra                      # Return from function
+    
+    is_clear_TRUE:  
+    li $v0, 1                   # Set $v0 to 1 (clear)
+    jr $ra                      # Return from function
 
 
 ######################################
@@ -401,38 +438,10 @@ pill_dropped:
         j start_new_pill            # end
 
 
-
-
 ######################################
-# clear_the_pre_dspl
+# load_pre_dspl
 ######################################
-clear_the_pre_dspl:
-    # start function
-    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
-    sw $ra, 0($sp)              # store $ra on the stack
-
-    # Draw big black rect
-    li $a0, 0       # $a0 = X co-ordinate to draw
-    li $a1, 0       # $a1 = Y co-ordinate to draw
-    li $a2, 32      # $a2 = width of rectangle
-    li $a3, 32      # $a3 = length of rectangle
-    # store black as the input colour
-    addi $sp, $sp, -4       # move stack pointer
-    lw $t0, BLACK           # get black colour
-    sw $t0, 0($sp)          # store black colour on stack
-
-    jal draw_rect
-
-    # end function
-    lw $ra, 0($sp)              # restore $ra from the stack
-    addi $sp, $sp, 4            # move the stack pointer to the new top element
-    jr $ra 
-
-
-######################################
-# load_storage
-######################################
-load_storage:
+load_pre_dspl:
     lw $t0 ADDR_STORAGE_BOARD
     lw $t1 ADDR_PRE_DSPL
     li $t2, 1024                # $t2 = length (4096 bytes)
@@ -464,6 +473,32 @@ load_storage:
         bne $t2 $zero load_storage_loop   
         
     jr $ra                  # end the copying
+
+
+######################################
+# clear_the_pre_dspl
+######################################
+clear_the_pre_dspl:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+
+    # Draw big black rect
+    li $a0, 0       # $a0 = X co-ordinate to draw
+    li $a1, 0       # $a1 = Y co-ordinate to draw
+    li $a2, 32      # $a2 = width of rectangle
+    li $a3, 32      # $a3 = length of rectangle
+    # store black as the input colour
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, BLACK           # get black colour
+    sw $t0, 0($sp)          # store black colour on stack
+
+    jal draw_rect
+
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
 
 
 ######################################
@@ -580,14 +615,14 @@ generate_new_pill:
 
 
 ######################################
-# draw_border
+# store_border
 ######################################
-draw_border:
+store_border:
     # store ra
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
 
-    # draw left wall
+    # store left wall
     li $a0, 5       # set X to 5
     li $a1, 13      # set Y to 13
     li $a2, 1       # set border width to 1
@@ -595,9 +630,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw right wall
+    # store right wall
     li $a0, 14       # set X to 14
     li $a1, 13      # set Y to 13
     li $a2, 1       # set border width to 1
@@ -605,9 +640,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw bottom wall
+    # store bottom wall
     li $a0, 5       # set X to 5
     li $a1, 30      # set Y to 30
     li $a2, 10       # set border width to 10
@@ -615,9 +650,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw top left
+    # store top left
     li $a0, 5       # set X to 5
     li $a1, 13      # set Y to 13
     li $a2, 4      # set border width to 4
@@ -625,9 +660,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw top right
+    # store top right
     li $a0, 11       # set X to 5
     li $a1, 13      # set Y to 13
     li $a2, 4      # set border width to 4
@@ -635,9 +670,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw left neck of funnel
+    # store left neck of funnel
     li $a0, 8       # set X to 8
     li $a1, 11      # set Y to 11
     li $a2, 1      # set border width to 1
@@ -645,9 +680,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw right neck of funnel
+    # store right neck of funnel
     li $a0, 11       # set X to 11
     li $a1, 11      # set Y to 11
     li $a2, 1      # set border width to 1
@@ -655,9 +690,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw left top neck of funnel
+    # store left top neck of funnel
     li $a0, 7       # set X to 7
     li $a1, 9      # set Y to 9
     li $a2, 1      # set border width to 1
@@ -665,9 +700,9 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
-    # draw right top neck of funnel
+    # store right top neck of funnel
     li $a0, 12       # set X to 12
     li $a1, 9      # set Y to 9
     li $a2, 1      # set border width to 1
@@ -675,7 +710,7 @@ draw_border:
     addi $sp, $sp, -4       # move stack pointer
     lw $t0, WHITE           # get black colour
     sw $t0, 0($sp)          # store black colour on stack
-    jal draw_rect
+    jal store_rect
 
     # end
     lw $ra, 0($sp)              # restore $ra from the stack
@@ -783,6 +818,82 @@ store_pixel:
 
 
 ######################################
+# draw_mario
+######################################
+draw_mario:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+    
+    # draw legs
+    li $a0, 16      # set X
+    li $a1, 12      # set Y
+    li $a2, 2       # set width
+    li $a3, 2       # set height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, BROWN           # get colour
+    sw $t0, 0($sp)          # store colour on stack    
+    jal draw_rect
+
+    # draw torso
+    li $a0, 16      # set X
+    li $a1, 6       # set Y
+    li $a2, 2       # set width
+    li $a3, 6       # set height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get colour
+    sw $t0, 0($sp)          # store colour on stack    
+    jal draw_rect
+
+    # draw head
+    li $a0, 15      # set X
+    li $a1, 7       # set Y
+    li $a2, 3       # set width
+    li $a3, 1       # set height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, SKIN           # get colour
+    sw $t0, 0($sp)          # store colour on stack
+    jal draw_rect
+
+    # draw last head pixel
+    li $a0, 17      # X co-ordinate to draw
+    li $a1, 6       # Y co-ordinate to draw
+    lw $a2, SKIN    # colour of pixel
+    jal draw_pixel
+
+    # draw hair
+    lw $a2, BROWN   # colour of pixel
+
+    li $a0, 16      # X co-ordinate to draw
+    li $a1, 5       # Y co-ordinate to draw
+    jal draw_pixel
+    li $a0, 17      # X co-ordinate to draw
+    li $a1, 5       # Y co-ordinate to draw
+    jal draw_pixel
+    li $a0, 18      # X co-ordinate to draw
+    li $a1, 6       # Y co-ordinate to draw
+    jal draw_pixel
+
+    # draw arm
+    li $a0, 16      # X co-ordinate to draw
+    li $a1, 9       # Y co-ordinate to draw
+    lw $a2, GREY    # colour of pixel
+    jal draw_pixel
+
+    # animate arm
+    li $a0, 16      # X co-ordinate to draw
+    li $a1, 10      # Y co-ordinate to draw
+    lw $a2, SKIN    # colour of pixel
+    jal draw_pixel
+
+    
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+
+######################################
 # draw_pixel
 
 # $a0 = X co-ordinate to draw
@@ -868,4 +979,72 @@ draw_rect:
         beq $t0, $a3, row_end       # when the last line has been drawn, break out of the line-drawing loop
         j row_start                 # jump to the start of the line-drawing section
     row_end:
+    jr $ra                      # return to the calling program
+
+
+######################################
+# store_line
+
+# $a0 = X co-ordinate to draw
+# $a1 = Y co-ordinate to draw
+# $a2 = length of line
+# $a3 = colour of line
+######################################
+store_line:
+    lw $t0, ADDR_STORAGE_BOARD  # $t0 = base address for display
+    sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $a1 by 128)
+    sll $a0, $a0, 2             # Calculate the X offset to add to $t0 (multiply $a0 by 4)
+    add $t1, $t0, $a1           # Add the Y offset to $t0, store the result in $t1
+    add $t1, $t1, $a0           # Add the X offset to $t2 ($t2 now has the starting location of the line in bitmap memory)
+    # Calculate the final point in the line (start point + length x 4)
+    sll $a2, $a2, 2             # Multiply the length by 4
+    add $t2, $t1, $a2           # Calculate the address of the final point in the line, store result in $t2.
+    
+    # Start the loop
+    line_store_start:
+        sw $a3, 0($t1)              # store a coloured pixel at the current location in the bitmap
+        # Loop until the current pixel has reached the final point in the line.
+        addi $t1, $t1, 4            # Move the current location to the next pixel
+        beq $t1, $t2, line_store_end      # Break out of the loop when $t1 == $t2
+        j line_store_start
+        # End the loop
+    line_store_end:
+
+    # Return to calling program
+    jr $ra
+
+
+######################################
+# store_rect
+
+# $a0 = X co-ordinate to draw
+# $a1 = Y co-ordinate to draw
+# $a2 = width of rectangle
+# $a3 = length of rectangle
+# 0($sp) = colour of rectangle
+######################################
+store_rect:
+    lw $t9, 0($sp)              # load colour from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+
+    add $t0, $zero, $zero       # create a loop variable with an iniital value of 0
+    row_store_start:
+        # store registers
+        addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+        sw $ra, 0($sp)              # store $ra on the stack
+        jal store_registers
+        
+        move $a3, $t9
+        jal store_line
+
+        # unstore registers
+        jal unstore_registers
+        lw $ra, 0($sp)              # restore $ra from the stack
+        addi $sp, $sp, 4            # move the stack pointer to the new top element
+
+        addi $a1, $a1, 1            # move to the next row to store
+        addi $t0, $t0, 1            # increment the row variable by 1
+        beq $t0, $a3, row_store_end       # when the last line has been stored, break out of the line-storing loop
+        j row_store_start                 # jump to the start of the line-storing section
+    row_store_end:
     jr $ra                      # return to the calling program
