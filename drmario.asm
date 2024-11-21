@@ -75,19 +75,34 @@ SECOND_PILL_B_COLOUR:
 
     # Run the game.
 main:
+    # clear memory
+    li $a0, 0
+    li $a1, 0
+    li $a2, 32
+    li $a3, 32
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $zero, 0($sp)              # store $ra on the stack
+    jal store_rect
+
+
+
     # Initialize the game
     jal store_border
 
     # Generate 4 new viruses
-    addi $a0, $zero, 1
+    addi $a0, $zero, 4
     jal generate_viruses
+    jal store_new_pill
+    jal load_pre_dspl
 
     start_new_pill:
         # Draw the pill
+
         jal generate_new_pill
 
-    
+    li $s5, 0                   # set pause to false
     li $s6, 600                 # Load mario animation
+    li $s7, 300                 # Load main animation
     
     starting_loop:
         # 3. Draw the screen
@@ -104,7 +119,8 @@ main:
         li $s6, 600             # reset mario animation to 0
         li $s0, 9              # X co-ord pill
         li $s1, 14               # Y co-ord pill
-        
+        jal store_new_pill
+
         j game_loop
         skip_reset_mario_animation:
 
@@ -123,6 +139,8 @@ game_loop:
     beq $t1 1 keyboard_input        # If first word == 1: key is pressed
     done_keyboard_input:            # return here after keyboard input
 
+    bne $s5, $zero, paused
+
     # 2a. Check for collisions
     # Reset the current game board
  
@@ -131,26 +149,27 @@ game_loop:
     # check for 4 in a row
     jal combo_check
     jal gravity_check
-
+    
 
 	# 3. Draw the screen
     jal clear_the_pre_dspl
     jal load_pre_dspl
     jal draw_mario
+    jal draw_viruses
     jal draw_pill
 
 	jal draw_the_screen
 
     # INCREASE ANIMATION COUNTERS
     # Virus animation
-    addi $s7, $s7, -1
-    bge $s7, $zero, skip_reset_virus_animation
-    li $s7, 90
-    skip_reset_virus_animation:
+    addi $s7, $s7, -10
+    bge $s7, $zero, skip_reset_game_animation
+    li $s7, 800
+    jal move_down
+    skip_reset_game_animation:
 
 
-
-
+    paused:
 	# 4. Sleep
     li $v0 32       # Code to sleep
     li $a0 9       # 1000ms / 120 = 9ms
@@ -167,6 +186,182 @@ game_loop:
 # game_over
 ######################################
 game_over:
+    # draw red border
+    li $a0, 15          # set X
+    li $a1, 14          # set Y
+    li $a2, 17           # set  width
+    li $a3, 12           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, RED        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    # draw black backround
+    li $a0, 16          # set X
+    li $a1, 15          # set Y
+    li $a2, 15           # set  width
+    li $a3, 10           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, BLACK        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    # draw G 
+    li $a0, 16          # set X
+    li $a1, 15          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 17          # set X
+    li $a1, 16          # set Y
+    jal draw_pixel
+    li $a0, 18          # set X
+    li $a1, 16          # set Y
+    jal draw_pixel
+    li $a0, 17          # set X
+    li $a1, 17         # set Y
+    jal draw_pixel
+
+    # draw A
+    li $a0, 20          # set X
+    li $a1, 15          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 21          # set X
+    li $a1, 16          # set Y
+    jal draw_pixel
+    li $a0, 21          # set X
+    li $a1, 18          # set Y
+    jal draw_pixel
+
+    # draw M
+    li $a0, 24          # set X
+    li $a1, 15          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 25          # set X
+    li $a1, 18         # set Y
+    jal draw_pixel
+
+    # draw E
+    li $a0, 28          # set X
+    li $a1, 15          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 30          # set X
+    li $a1, 16          # set Y
+    jal draw_pixel
+    li $a0, 29          # set X
+    li $a1, 17          # set Y
+    jal draw_pixel
+    li $a0, 30          # set X
+    li $a1, 17         # set Y
+    jal draw_pixel
+
+    # draw O 
+    li $a0, 16          # set X
+    li $a1, 21          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 17          # set X
+    li $a1, 22          # set Y
+    jal draw_pixel
+    li $a0, 17          # set X
+    li $a1, 23          # set Y
+    jal draw_pixel
+
+    # draw V
+    li $a0, 20          # set X
+    li $a1, 21          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 21          # set X
+    li $a1, 21          # set Y
+    jal draw_pixel
+    li $a0, 21          # set X
+    li $a1, 22          # set Y
+    jal draw_pixel
+    li $a0, 21          # set X
+    li $a1, 23         # set Y
+    jal draw_pixel
+
+    # draw E
+    li $a0, 24          # set X
+    li $a1, 21          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE       # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 26          # set X
+    li $a1, 22          # set Y
+    jal draw_pixel
+    li $a0, 25          # set X
+    li $a1, 23          # set Y
+    jal draw_pixel
+    li $a0, 26          # set X
+    li $a1, 23         # set Y
+    jal draw_pixel
+
+    # draw R
+    li $a0, 28          # set X
+    li $a1, 21          # set Y
+    li $a2, 3           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4   # move stack pointer
+    lw $t0, WHITE        # get colour
+    sw $t0, 0($sp)      # store colour on stack
+    jal draw_rect
+
+    lw $a2, BLACK       # set  width
+    li $a0, 30          # set X
+    li $a1, 23          # set Y
+    jal draw_pixel
+    li $a0, 29          # set X
+    li $a1, 24          # set Y
+    jal draw_pixel
+
+    jal draw_the_screen
+
+
     li $v0, 10                  # exit the program gracefully
     syscall                     # (so it doesn't continue into the draw_rect function again)
 
@@ -537,9 +732,7 @@ generate_virus_colour:
 ######################################
 keyboard_input:
     lw $a0 4($t0)               # Load the second word from keyboardx`
-    
-    beq $a0 0x71 quit_game      # If second word == Q: quit game
-    
+       
     # beq $a0 0x61 move_left      # If second word == A: move left
     beq $a0 0x6a move_left      # If second word == J: move left
     
@@ -551,16 +744,14 @@ keyboard_input:
     
     # beq $a0 0x77 rotate         # If second word == W: rotate
     beq $a0 0x7a rotate         # If second word == Z: rotate
+
+    beq $a0 0x71 game_over      # If second word == Q: quit game
+
+    beq $a0 0x72 main           # If second word == R: restart game
+
+    beq $a0 0x70 flip_pause           # If second word == P: pause game
     
     j done_keyboard_input              # otherwise input is bad
-
-
-######################################
-# quit_game
-######################################
-quit_game:
-    li $v0 10
-    syscall
 
 
 ######################################
@@ -592,6 +783,40 @@ is_clear:
     li $v0, 1                   # Set $v0 to 1 (clear)
     jr $ra                      # Return from function
 
+
+######################################
+# flip_pause
+######################################
+flip_pause:
+    beq $s5 $zero, set_pause
+    move $s5, $zero
+    j done_keyboard_input
+
+    set_pause:
+    li $s5, 1
+    
+    # draw pause
+    li $a0, 9      # set X
+    li $a1, 8      # set Y
+    li $a2, 4       # set width
+    li $a3, 19       # set height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get colour
+    sw $t0, 0($sp)          # store colour on stack    
+    jal draw_rect
+
+    li $a0, 20      # set X
+    li $a1, 8      # set Y
+    li $a2, 4       # set width
+    li $a3, 19       # set height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, WHITE           # get colour
+    sw $t0, 0($sp)          # store colour on stack    
+    jal draw_rect
+
+    jal draw_the_screen
+
+    j paused
 
 ######################################
 # move_left
@@ -745,7 +970,7 @@ load_pre_dspl:
     li $t2, 1024                # $t2 = length (4096 bytes)
 
     # animation setup
-    li $t4, 82                 # value to compare animation counter for viruses
+    li $t4, 700                 # value to compare animation counter for viruses
     lw $t9, REDISH               # Get black to compare
     lw $t8, YELLOWISH               # Get black to compare
     lw $t7, BLUEISH               # Get black to compare
@@ -909,16 +1134,16 @@ store_new_pill:
     # returns a0 filled with one of 1 colours, overwrites a0
     jal generate_pill_colour
     move $a2, $a0
-    li $a0, 10
-    li $a1, 14
-    jal draw_pixel
+    li $a0, 14
+    li $a1, 10
+    jal store_pixel
 
     # returns a0 filled with one of 1 colours, overwrites a0
     jal generate_pill_colour
     move $a2, $a0
-    li $a0, 11
-    li $a1, 14
-    jal draw_pixel
+    li $a0, 15
+    li $a1, 10
+    jal store_pixel
 
     # end function
     lw $ra, 0($sp)              # restore $ra from the stack
@@ -949,15 +1174,122 @@ generate_new_pill:
     li $s1, 10      # capsule Y
     li $s2, 0       # capsule orientation
     
-    # returns a0 filled with one of 1 colours, overwrites a0
-    jal generate_pill_colour
-    move $s3, $a0       # sets the colour of capsule A to randomly generated colour
+    # fetch colour from storage
+    li $a0, 14
+    li $a1, 10
+    jal is_clear
+    move $s3, $v1
+    #overwrite pill with black
+    move $a2, $zero
+    li $a0, 14
+    li $a1, 10
+    jal store_pixel
 
-    # returns a0 filled with one of 1 colours, overwrites a0
-    jal generate_pill_colour
-    move $s4, $a0       # sets the colour of capsula B to a randomly generated colour
+    li $a0, 15
+    li $a1, 10
+    jal is_clear
+    move $s4, $v1
+    #overwrite pill with black
+    move $a2, $zero
+    li $a0, 15
+    li $a1, 10
+    jal store_pixel
+
 
     # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+
+######################################
+# draw_viruses
+######################################
+draw_viruses:
+    # store ra
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+
+    li $t7, 200
+    li $t8, 600
+    li $t6, 400
+
+    # draw blue virus
+    li $a0, 17          # set X
+    li $a1, 17          # set Y
+    li $a2, 4           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, BLUE         # get colour
+    sw $t0, 0($sp)          # store colour on stack
+    jal store_rect
+
+    li $a0, 18          # set X
+    li $a1, 18          # set Y
+    move $a2, $zero       # set colour
+    jal store_pixel
+    ble $s7, $t7, flicker_blue_virus 
+    li $a0, 19          # set X
+    li $a1, 18          # set Y
+    lw $a2, WHITE     # set colour
+    jal draw_pixel
+    flicker_blue_virus:
+
+    # draw yellow virus
+    li $a0, 22          # set X
+    li $a1, 22          # set Y
+    li $a2, 4           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, YELLOW       # get colour
+    sw $t0, 0($sp)          # store colour on stack
+    jal store_rect
+
+    li $a0, 22          # set X
+    li $a1, 23          # set Y
+    move $a2, $zero       # set colour
+    jal store_pixel
+    li $a0, 24          # set X
+    li $a1, 23          # set Y
+    move $a2, $zero     # set colour
+    jal store_pixel
+    bge $s7, $t8, flicker_yellow_virus 
+    li $a0, 23          # set X
+    li $a1, 24          # set Y
+    lw $a2, RED     # set colour
+    jal draw_pixel
+    flicker_yellow_virus:
+
+    # draw red virus
+    li $a0, 24          # set X
+    li $a1, 14          # set Y
+    li $a2, 4           # set  width
+    li $a3, 4           # set  height
+    addi $sp, $sp, -4       # move stack pointer
+    lw $t0, RED          # get colour
+    sw $t0, 0($sp)          # store colour on stack
+    jal store_rect
+
+    li $a0, 24          # set X
+    li $a1, 15          # set Y
+    move $a2, $zero       # set colour
+    jal store_pixel
+    li $a0, 26          # set X
+    li $a1, 15          # set Y
+    lw $a2, BLACK     # set colour
+    jal store_pixel
+    ble $s7, $t6, flicker_red_virus 
+    li $a0, 24          # set X
+    li $a1, 17          # set Y
+    lw $a2, WHITE     # set colour
+    jal draw_pixel
+    li $a0, 25          # set X
+    li $a1, 17          # set Y
+    lw $a2, WHITE     # set colour
+    jal draw_pixel
+    flicker_red_virus:
+
+    # end
     lw $ra, 0($sp)              # restore $ra from the stack
     addi $sp, $sp, 4            # move the stack pointer to the new top element
     jr $ra 
