@@ -47,6 +47,8 @@ WHITE:
     .word 0xffffff
 BLACK:
     .word 0x000000
+BLACKISH:
+    .word 0x000001
 
 
 # Drawing colours
@@ -60,7 +62,10 @@ GREY:
 ##############################################################################
 # Mutable Data
 ##############################################################################
-
+SECOND_PILL_A_COLOUR:
+    .word 0x000000
+SECOND_PILL_B_COLOUR:
+    .word 0x000000
 
 ##############################################################################
 # Code
@@ -74,7 +79,7 @@ main:
     jal store_border
 
     # Generate 4 new viruses
-    addi $a0, $zero, 4
+    addi $a0, $zero, 1
     jal generate_viruses
 
     start_new_pill:
@@ -125,8 +130,7 @@ game_loop:
 	# 2b. Update locations (capsules)
     # check for 4 in a row
     jal combo_check
-       
-
+    jal gravity_check
 
 
 	# 3. Draw the screen
@@ -160,6 +164,73 @@ game_loop:
 # Functions
 ##############################################################################
 ######################################
+# game_over
+######################################
+game_over:
+    li $v0, 10                  # exit the program gracefully
+    syscall                     # (so it doesn't continue into the draw_rect function again)
+
+
+######################################
+# combo_check
+######################################
+gravity_check:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+
+    li $t0, 0       # current X co-ord to check
+    li $t1, 0       # current Y co-ord to check
+    li $t9, 7       # last X co-ord to check
+    li $t8, 15      # last Y co-ord to check
+    lw $t2, ADDR_STORAGE_BOARD
+    lw $t3, BLACK
+    lw $t5, YELLOWISH
+    lw $t6, BLUEISH
+    lw $t7, REDISH
+
+    gravity_point_loop:
+        addi $a0, $t0, 6        # current X co-ord to check with pillbox offset
+        sll $a0, $a0, 2         # Calculate the X offset to add to $t0 (multiply $a0 by 4)
+        addi $a1, $t1, 14       # current Y co-ord to check with pillbox offset
+        sll $a1, $a1, 7         # Calculate the Y offset to add to $t0 (multiply $a1 by 128)        
+        
+        add $a0, $a0, $a1       # Combine X and Y pixel location to check into $a0
+        add $a0, $a0, $t2       # Find the actual memory location
+        lw $a1, 0($a0)          # Load pixel to check
+
+        beq $a1, $t3, skip_gravity_checking         # pixel is black
+        beq $a1, $t5, skip_gravity_checking         # pixel is virus
+        beq $a1, $t6, skip_gravity_checking         # pixel is virus
+        beq $a1, $t7, skip_gravity_checking         # pixel is virus
+            # Otherwise pixel is not black So check pixel below to see if its black
+            lw $t4, 128($a0)        # load pixel below
+            bne $t4, $t3, skip_gravity_checking       # pixel below is not black
+                # Otherwise pixel black, so space below is free
+                sw $a1, 128($a0)    # store block in space below
+                sw $t3, 0($a0)      # store black where pixel used to be
+        
+        skip_gravity_checking:
+        beq $t0, $t9, end_of_row_gravity      # Scanning has reached the end of the row
+        j not_end_of_gravity_row
+        
+        end_of_row_gravity:
+            beq $t1, $t8, end_gravity_checking
+            addi $t1, $t1, 1        # increment current checked Y co-ord
+            li $t0, 0               # reset X co-ord to start of row   
+            j gravity_point_loop
+        
+        not_end_of_gravity_row:
+        addi $t0, $t0, 1        # incremend current checked X co-ord
+        j gravity_point_loop 
+        
+    # end function
+    end_gravity_checking:
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+######################################
 # combo_check
 ######################################
 combo_check:
@@ -182,8 +253,9 @@ combo_check:
         
         add $a0, $a0, $a1       # Combine X and Y pixel location to check into $a0
         add $a0, $a0, $t2       # Find the actual memory location
-        lw $a1, 0($a0)
-        beq $a1, $t3, skip_combo_checking
+        lw $a1, 0($a0)          # Load pixel to check
+        beq $a1, $t3, skip_combo_checking       # Make sure its not black
+        # Otherwise pixel is not black
         
         li $v0, 1                   # set combo to 1
         jal store_registers
@@ -191,13 +263,31 @@ combo_check:
         jal unstore_registers
         
         li $t4, 4
-        bge $v0, $t4, erase_right
-        j skip_combo_checking
+        bge $v0, $t4, erase_right       # check if combo is more than 4
+        j skip_to_vertical_combo
         
         erase_right:
             jal store_registers
             jal combo_erase_right
             jal unstore_registers
+            j end_combo_checking 
+
+        skip_to_vertical_combo:
+            li $v0, 1                   # set combo to 1
+            jal store_registers
+            jal combo_check_bottom
+            jal unstore_registers
+
+        li $t4, 4
+        bge $v0, $t4, erase_bottom       # check if combo is more than 4
+        j skip_combo_checking
+
+        erase_bottom:
+            jal store_registers
+            jal combo_erase_bottom
+            jal unstore_registers
+            j end_combo_checking 
+        
         
         skip_combo_checking:
         beq $t0, $t9, end_of_row_combo      # Scanning has reached the end of the row
@@ -235,6 +325,25 @@ combo_erase_right:
     j combo_erase_right
     
     done_erasing:
+    jr $ra
+
+
+######################################
+# combo_erase_bottom
+# $a0 = memory location to check
+# $v0 = number of blocks to erase
+######################################
+combo_erase_bottom:
+    lw $t0, BLACK
+    beq $v0, $zero done_erasing_bottom
+    
+    sw $t0, 0($a0)      # erase square
+    addi $a0, $a0, 128    # move to next square
+    addi $v0, $v0, -1   # subtract one from counter
+    
+    j combo_erase_bottom
+    
+    done_erasing_bottom:
     jr $ra
 
 
@@ -287,7 +396,56 @@ combo_check_right:
     combo_right_ends:
     jr $ra 
    
+
+#####################################
+# combo_check_bottom
+# $a0 = memory location to check
+# $a1 = colour to check
+
+# $v0 = return combo number
+######################################
+combo_check_bottom:   
+    addi $a0, $a0, 128    # go bottom
+    lw $t0, 0($a0)      # load the colour on the bottom
+    
+    lw  $t1, YELLOW    
+    lw  $t2, YELLOWISH
+    beq $a1, $t1, combo_bottom_yellow
+    beq $a1, $t2, combo_bottom_yellow
+    
+    lw  $t1, RED    
+    lw  $t2, REDISH
+    beq $a1, $t1, combo_bottom_red
+    beq $a1, $t2, combo_bottom_red
+    
+    lw  $t1, BLUE    
+    lw  $t2, BLUEISH
+    beq $a1, $t1, combo_bottom_blue
+    beq $a1, $t2, combo_bottom_blue
+    j combo_bottom_ends
+    
+    combo_bottom_yellow:
+        beq $t0, $t1 combo_bottom_continues
+        beq $t0, $t2 combo_bottom_continues
+        j combo_bottom_ends
         
+    combo_bottom_red:
+        beq $t0, $t1 combo_bottom_continues
+        beq $t0, $t2 combo_bottom_continues
+        j combo_bottom_ends
+        
+    combo_bottom_blue:
+        beq $t0, $t1 combo_bottom_continues
+        beq $t0, $t2 combo_bottom_continues
+        j combo_bottom_ends
+    
+    combo_bottom_continues:
+        addi $v0, $v0, 1
+        j combo_check_bottom
+    
+    combo_bottom_ends:
+    jr $ra
+
 ######################################
 # generate_viruses
 # $a0 = num_viruses
@@ -409,6 +567,8 @@ quit_game:
 # is_clear
 # $a0 = X co-ord to check
 # $a1 = Y co-ord to check
+# $v0 = return (0 = False, not clear)
+# $v1 = return colour of pixel, not used if clear as black can be assumed
 ######################################
 is_clear:
     lw $t0, ADDR_PRE_DSPL
@@ -419,10 +579,10 @@ is_clear:
     sll $a1, $a1, 7             # Calculate the Y offset to add to $t0 (multiply $s1 by 128)
     add $t0, $t0, $a1           # Shift accessed address to Y co-ord to check
 
-    lw $t1, 0($t0)              # Load byte into $t1 to check pre display 
+    lw $v1, 0($t0)              # Load byte into $v1 to check pre display 
     lw $t2, BLACK               # Load BLACK to compare against
 
-    beq $t1, $t2, is_clear_TRUE            # If $t1 == $t2, the position is clear
+    beq $v1, $t2, is_clear_TRUE            # If $v1 == $t2, the position is clear
 
     # otherwise is_clear_False
     li $v0, 0                   # Otherwise, set $v0 to 0 (not clear)
@@ -584,9 +744,34 @@ load_pre_dspl:
     lw $t1 ADDR_PRE_DSPL
     li $t2, 1024                # $t2 = length (4096 bytes)
 
+    # animation setup
+    li $t4, 82                 # value to compare animation counter for viruses
+    lw $t9, REDISH               # Get black to compare
+    lw $t8, YELLOWISH               # Get black to compare
+    lw $t7, BLUEISH               # Get black to compare
+    lw $t6, BLACKISH
+
+    li $v0, 1           # Set over state to True
+
     load_storage_loop:
         lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3    
         sw $t3, 0($t1)          # Store byte into ADDR_DISP
+
+
+        # Check if virus
+        beq $t3, $t9, flicker_virus
+        beq $t3, $t8, flicker_virus
+        beq $t3, $t7, flicker_virus
+        j skip_virus_unrendering
+
+        flicker_virus:
+            li $v0, 0               # set game over false
+            # Check virus animation cycle to see if they should be loaded
+            blt $s7, $t4, skip_virus_unrendering
+            sw $t6, 0($t1)          # store blackish
+
+
+        skip_virus_unrendering:
 
         # Increment pointers and decrement counter
         addi $t0, $t0, 4        # Move to next byte in ADDR_PRE_DSPL
@@ -594,7 +779,9 @@ load_pre_dspl:
         addi $t2, $t2, -1       # Decrease counter
         
         bne $t2 $zero load_storage_loop   
-        
+    
+    bne $v0, $zero, game_over
+
     jr $ra                  # end the copying
 
 
@@ -632,38 +819,9 @@ draw_the_screen:
     lw $t1 ADDR_DSPL
     li $t2, 1024         # $t2 = length (4096 bytes)
 
-    # animation setup
-    li $t4, 82                 # value to compare animation counter for viruses
-    lw $t9, REDISH               # Get black to compare
-    lw $t8, YELLOWISH               # Get black to compare
-    lw $t7, BLUEISH               # Get black to compare
-
     copy_board_loop:
         lw $t3, 0($t0)          # Load byte from ADDR_PRE_DSPL into $t3
         sw $t3, 0($t1)          # Store byte into ADDR_DISP
-        
-        # Check virus animation cycle to see if they should be loaded
-        blt $s7, $t4, skip_virus_unrendering
-        # Check if virus
-        beq $t3, $t9, flicker_virus_red
-        beq $t3, $t8, flicker_virus_yellow
-        beq $t3, $t7, flicker_virus_blue
-        j skip_virus_unrendering
-
-        flicker_virus_red:
-        lw $t6, RED
-        sw $t6, 0($t1)          # Store byte into ADDR_DISP
-        j skip_virus_unrendering
-        
-        flicker_virus_yellow:
-        lw $t6, YELLOW
-        sw $t6, 0($t1)          # Store byte into 
-        j skip_virus_unrendering
-        
-        flicker_virus_blue:
-        lW $t6, BLUE
-        sw $t6, 0($t1)          # Store byte into 
-        skip_virus_unrendering:
 
         # Increment pointers and decrement counter
         addi $t0, $t0, 4        # Move to next byte in ADDR_PRE_DSPL
@@ -741,17 +899,56 @@ generate_pill_colour:
 
 
 ######################################
+# store_new_pill
+######################################
+store_new_pill:
+    # start function
+    addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
+    sw $ra, 0($sp)              # store $ra on the stack
+
+    # returns a0 filled with one of 1 colours, overwrites a0
+    jal generate_pill_colour
+    move $a2, $a0
+    li $a0, 10
+    li $a1, 14
+    jal draw_pixel
+
+    # returns a0 filled with one of 1 colours, overwrites a0
+    jal generate_pill_colour
+    move $a2, $a0
+    li $a0, 11
+    li $a1, 14
+    jal draw_pixel
+
+    # end function
+    lw $ra, 0($sp)              # restore $ra from the stack
+    addi $sp, $sp, 4            # move the stack pointer to the new top element
+    jr $ra 
+
+######################################
 # generate_new_pill
 ######################################
 generate_new_pill:
     # start function
     addi $sp, $sp, -4           # move the stack pointer to the next empty spot on the stack
     sw $ra, 0($sp)              # store $ra on the stack
-    
+
+    # Check if new pill location is clear
+    li $a0, 9
+    li $a1, 14
+    jal is_clear
+    beq $v0, $zero, game_over
+
+    li $a0, 10
+    li $a1, 14
+    jal is_clear
+    beq $v0, $zero, game_over
+
+    # load pill
     li $s0, 14       # capsule X
     li $s1, 10      # capsule Y
     li $s2, 0       # capsule orientation
-
+    
     # returns a0 filled with one of 1 colours, overwrites a0
     jal generate_pill_colour
     move $s3, $a0       # sets the colour of capsule A to randomly generated colour
