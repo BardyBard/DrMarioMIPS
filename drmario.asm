@@ -360,14 +360,15 @@ game_over:
     jal draw_pixel
 
     jal draw_the_screen
-
-
+    li $s5, 1
+    j paused
+    
     li $v0, 10                  # exit the program gracefully
     syscall                     # (so it doesn't continue into the draw_rect function again)
 
 
 ######################################
-# combo_check
+# gravity_check
 ######################################
 gravity_check:
     # start function
@@ -465,6 +466,13 @@ combo_check:
             jal store_registers
             jal combo_erase_right
             jal unstore_registers
+            # play success sound
+            li $v0 31   # MIDI Code
+            li $a0 90   # Note
+            li $a1 90   # Duration (ms)
+            li $a2 13   # Instrument type
+            li $a3 90   # Volumne
+            syscall
             j end_combo_checking 
 
         skip_to_vertical_combo:
@@ -481,6 +489,13 @@ combo_check:
             jal store_registers
             jal combo_erase_bottom
             jal unstore_registers
+            # play success sound
+            li $v0 31   # MIDI Code
+            li $a0 90   # Note
+            li $a1 90   # Duration (ms)
+            li $a2 13   # Instrument type
+            li $a3 90   # Volumne
+            syscall
             j end_combo_checking 
         
         
@@ -906,10 +921,18 @@ rotate:
         jal is_clear
         beq $v0, $zero, done_keyboard_input     # don't rotate since not clear
         
+        
         li $s2, 0           # set rotation to horizontal
         move $t0, $s3       # store s3 temporarily
         move $s3, $s4       # swap s4 and s3
         move $s4, $t0       # swap s4 and s3, with stored s3
+        
+        # play rotate sound
+        li $v0 31   # MIDI Code
+        li $a0 41    # Note
+        li $a1 100   # Duration (ms)
+        li $a2 127   # Instrument type
+        li $a3 90   # Volumne
         
         j done_keyboard_input
 
@@ -928,19 +951,31 @@ rotate:
 # pill_dropped
 ######################################
 pill_dropped:
-        li $v0 31   # MIDI Code
-        li $a0 35   # Note
-        li $a1 200  # Duration (ms)
-        li $a2 15   # Instrument type
-        li $a3 30   # Volumne
-        syscall
-
         # save pill A
         move $a0, $s0           # pass the X co-ord input
         move $a1, $s1           # pass the Y co-ord input
         move $a2, $s3           # pass the colour as input
         jal store_pixel
-
+        
+        li $v0 31   # MIDI Code
+        li $a0 50   # Note
+        li $a1 90   # Duration (ms)
+        li $a2 127   # Instrument type
+        li $a3 70   # Volumne
+        syscall
+        li $v0 31   # MIDI Code
+        li $a0 20   # Note
+        li $a1 90   # Duration (ms)
+        li $a2 127   # Instrument type
+        li $a3 70   # Volumne
+        syscall
+        li $v0 31   # MIDI Code
+        li $a0 90   # Note
+        li $a1 90   # Duration (ms)
+        li $a2 127   # Instrument type
+        li $a3 70   # Volumne
+        syscall
+        
         beq $s2, $zero, dropped_horizontally
         # Otherwise dropped_vertically
             # save pill B
@@ -957,7 +992,7 @@ pill_dropped:
             move $a1, $s1               # pass the Y co-ord input
             move $a2, $s4               # pass the colour as input
             jal store_pixel
-
+    
         j start_new_pill            # end
 
 
@@ -1194,8 +1229,7 @@ generate_new_pill:
     li $a0, 15
     li $a1, 10
     jal store_pixel
-
-
+    
     # end function
     lw $ra, 0($sp)              # restore $ra from the stack
     addi $sp, $sp, 4            # move the stack pointer to the new top element
