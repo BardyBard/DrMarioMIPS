@@ -816,7 +816,7 @@ flip_pause:
     li $a2, 4       # set width
     li $a3, 19       # set height
     addi $sp, $sp, -4       # move stack pointer
-    lw $t0, WHITE           # get colour
+    lw $t0, GREY           # get colour
     sw $t0, 0($sp)          # store colour on stack    
     jal draw_rect
 
@@ -825,7 +825,7 @@ flip_pause:
     li $a2, 4       # set width
     li $a3, 19       # set height
     addi $sp, $sp, -4       # move stack pointer
-    lw $t0, WHITE           # get colour
+    lw $t0, GREY           # get colour
     sw $t0, 0($sp)          # store colour on stack    
     jal draw_rect
 
