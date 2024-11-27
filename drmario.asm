@@ -748,17 +748,17 @@ generate_virus_colour:
 keyboard_input:
     lw $a0 4($t0)               # Load the second word from keyboardx`
        
-    # beq $a0 0x61 move_left      # If second word == A: move left
-    beq $a0 0x6a move_left      # If second word == J: move left
+    beq $a0 0x61 move_left      # If second word == A: move left
+    # beq $a0 0x6a move_left      # If second word == J: move left
     
-    # beq $a0 0x64 move_right     # If second word == D: move right
-    beq $a0 0x6c move_right     # If second word == L: move right
+    beq $a0 0x64 move_right     # If second word == D: move right
+    # beq $a0 0x6c move_right     # If second word == L: move right
 
-    # beq $a0 0x73 move_down      # If second word == S: move down
-    beq $a0 0x6b move_down     # If second word == K: move down
+    beq $a0 0x73 move_down      # If second word == S: move down
+    # beq $a0 0x6b move_down     # If second word == K: move down
     
-    # beq $a0 0x77 rotate         # If second word == W: rotate
-    beq $a0 0x7a rotate         # If second word == Z: rotate
+    beq $a0 0x77 rotate         # If second word == W: rotate
+    # beq $a0 0x7a rotate         # If second word == Z: rotate
 
     beq $a0 0x71 game_over      # If second word == Q: quit game
 
